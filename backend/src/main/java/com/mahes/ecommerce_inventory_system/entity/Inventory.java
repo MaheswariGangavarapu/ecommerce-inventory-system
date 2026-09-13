@@ -81,4 +81,8 @@ public class Inventory {
     public Integer getAvailableQuantity() {
         return quantityOnHand - quantityReserved;
     }
+        @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }

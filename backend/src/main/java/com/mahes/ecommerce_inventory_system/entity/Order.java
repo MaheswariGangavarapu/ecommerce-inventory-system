@@ -100,4 +100,14 @@ public class Order {
         orderItems.add(item);
         item.setOrder(this);
     }
+        @PrePersist
+    protected void onCreate() {
+        orderDate = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
 }
