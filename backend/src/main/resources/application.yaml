@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: ecommerce-inventory-system
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:5432/ecommerce_inventory_db
+    username: postgres
+    password: Mahi@2005
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate   # we own the schema via schema.sql, not Hibernate auto-generation
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false    # avoid lazy-loading issues leaking into controllers
+
+server:
+  port: 8090
