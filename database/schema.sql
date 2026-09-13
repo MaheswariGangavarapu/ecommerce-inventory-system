@@ -1,11 +1,11 @@
 -- ============================================
 -- E-Commerce / Inventory Management - Schema
--- (PostgreSQL version)
+-- (PostgreSQL version - FIXED: BIGSERIAL/BIGINT to match Java Long IDs)
 -- ============================================
 
 -- ---------- CATEGORIES ----------
 CREATE TABLE categories (
-    category_id     SERIAL PRIMARY KEY,
+    category_id     BIGSERIAL PRIMARY KEY,
     name            VARCHAR(100) NOT NULL UNIQUE,
     description     VARCHAR(500),
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -14,11 +14,11 @@ CREATE TABLE categories (
 
 -- ---------- PRODUCTS ----------
 CREATE TABLE products (
-    product_id      SERIAL PRIMARY KEY,
+    product_id      BIGSERIAL PRIMARY KEY,
     sku             VARCHAR(50) NOT NULL UNIQUE,
     name            VARCHAR(200) NOT NULL,
     description     TEXT,
-    category_id     INTEGER,
+    category_id     BIGINT,
     price           DECIMAL(10,2) NOT NULL CHECK (price >= 0),
     is_active       BOOLEAN NOT NULL DEFAULT TRUE,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -32,10 +32,9 @@ CREATE INDEX idx_products_category ON products(category_id);
 CREATE INDEX idx_products_active ON products(is_active);
 
 -- ---------- INVENTORY ----------
--- Separate from products to isolate stock mutations (concurrency-sensitive)
 CREATE TABLE inventory (
-    inventory_id        SERIAL PRIMARY KEY,
-    product_id          INTEGER NOT NULL UNIQUE,
+    inventory_id        BIGSERIAL PRIMARY KEY,
+    product_id          BIGINT NOT NULL UNIQUE,
     quantity_on_hand    INTEGER NOT NULL DEFAULT 0 CHECK (quantity_on_hand >= 0),
     quantity_reserved   INTEGER NOT NULL DEFAULT 0 CHECK (quantity_reserved >= 0),
     reorder_threshold   INTEGER NOT NULL DEFAULT 10,
@@ -47,7 +46,7 @@ CREATE TABLE inventory (
 
 -- ---------- CUSTOMERS ----------
 CREATE TABLE customers (
-    customer_id     SERIAL PRIMARY KEY,
+    customer_id     BIGSERIAL PRIMARY KEY,
     first_name      VARCHAR(100) NOT NULL,
     last_name       VARCHAR(100) NOT NULL,
     email           VARCHAR(150) NOT NULL UNIQUE,
@@ -68,8 +67,8 @@ CREATE TYPE order_status_enum AS ENUM
 
 -- ---------- ORDERS (header) ----------
 CREATE TABLE orders (
-    order_id        SERIAL PRIMARY KEY,
-    customer_id     INTEGER NOT NULL,
+    order_id        BIGSERIAL PRIMARY KEY,
+    customer_id     BIGINT NOT NULL,
     order_status    order_status_enum NOT NULL DEFAULT 'PENDING',
     total_amount    DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     order_date      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -84,11 +83,11 @@ CREATE INDEX idx_orders_status ON orders(order_status);
 
 -- ---------- ORDER ITEMS (line items) ----------
 CREATE TABLE order_items (
-    order_item_id   SERIAL PRIMARY KEY,
-    order_id        INTEGER NOT NULL,
-    product_id      INTEGER NOT NULL,
+    order_item_id   BIGSERIAL PRIMARY KEY,
+    order_id        BIGINT NOT NULL,
+    product_id      BIGINT NOT NULL,
     quantity        INTEGER NOT NULL CHECK (quantity > 0),
-    unit_price      DECIMAL(10,2) NOT NULL,   -- price snapshot at order time
+    unit_price      DECIMAL(10,2) NOT NULL,
     line_total      DECIMAL(10,2) NOT NULL,
     CONSTRAINT fk_order_items_order
         FOREIGN KEY (order_id) REFERENCES orders(order_id)
@@ -102,8 +101,6 @@ CREATE INDEX idx_order_items_order ON order_items(order_id);
 CREATE INDEX idx_order_items_product ON order_items(product_id);
 
 -- ---------- AUTO-UPDATE updated_at TRIGGER FUNCTION ----------
--- Postgres has no native "ON UPDATE CURRENT_TIMESTAMP" like MySQL,
--- so we replicate it with a trigger function applied to each table.
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
