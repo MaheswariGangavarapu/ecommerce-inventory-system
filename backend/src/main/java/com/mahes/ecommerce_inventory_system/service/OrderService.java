@@ -3,6 +3,8 @@ package com.mahes.ecommerce_inventory_system.service;
 import com.mahes.ecommerce_inventory_system.dao.InventoryDao;
 import com.mahes.ecommerce_inventory_system.dto.CreateOrderRequest;
 import com.mahes.ecommerce_inventory_system.dto.OrderItemRequest;
+import com.mahes.ecommerce_inventory_system.dto.OrderItemResponse;
+import com.mahes.ecommerce_inventory_system.dto.OrderResponse;
 import com.mahes.ecommerce_inventory_system.entity.*;
 import com.mahes.ecommerce_inventory_system.repository.CustomerRepository;
 import com.mahes.ecommerce_inventory_system.repository.OrderRepository;
@@ -34,7 +36,7 @@ public class OrderService {
     }
 
     @Transactional
-    public Order placeOrder(CreateOrderRequest request) {
+    public OrderResponse placeOrder(CreateOrderRequest request) {
 
         // Step 1: Load the customer, or fail fast if they don't exist.
         Customer customer = customerRepository.findById(request.getCustomerId())
@@ -42,8 +44,6 @@ public class OrderService {
                         "Customer not found with id: " + request.getCustomerId()));
 
         // Step 2: Reserve stock for EVERY item first, before creating anything.
-        // We track what we've already reserved so we can roll it back manually
-        // if a LATER item in the same order fails.
         List<Long> reservedProductIds = new ArrayList<>();
         List<Integer> reservedQuantities = new ArrayList<>();
 
@@ -52,8 +52,7 @@ public class OrderService {
                     itemRequest.getProductId(), itemRequest.getQuantity());
 
             if (!reserved) {
-                // Not enough stock for this item — undo every reservation
-                // we already made earlier in this same loop, then fail.
+                // Not enough stock — undo every reservation made so far, then fail.
                 for (int i = 0; i < reservedProductIds.size(); i++) {
                     inventoryDao.releaseReservedStock(
                             reservedProductIds.get(i), reservedQuantities.get(i));
@@ -70,8 +69,6 @@ public class OrderService {
         Order order = new Order();
         order.setCustomer(customer);
         order.setOrderStatus(OrderStatus.PENDING);
-        order.setOrderDate(LocalDateTime.now());
-        order.setUpdatedAt(LocalDateTime.now());
 
         BigDecimal total = BigDecimal.ZERO;
 
@@ -92,17 +89,54 @@ public class OrderService {
 
         order.setTotalAmount(total);
 
-        // Step 4: Save everything. Because of cascade = ALL on Order.orderItems,
-        // saving the Order automatically saves all its OrderItems too.
-        return orderRepository.save(order);
+        Order savedOrder = orderRepository.save(order);
+
+        // Step 4: Convert to a flat DTO while still inside the transaction,
+        // so lazy-loaded fields can still be accessed safely.
+        return toResponse(savedOrder);
     }
 
-    public Order getOrderById(Long id) {
-        return orderRepository.findById(id)
+    @Transactional(readOnly = true)
+    public OrderResponse getOrderById(Long id) {
+        Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Order not found with id: " + id));
+        return toResponse(order);
     }
 
-    public List<Order> getAllOrders() {
-        return orderRepository.findAll();
+    @Transactional(readOnly = true)
+    public List<OrderResponse> getAllOrders() {
+        return orderRepository.findAll()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    // Converts a JPA entity into a flat response DTO.
+    private OrderResponse toResponse(Order order) {
+        OrderResponse response = new OrderResponse();
+        response.setOrderId(order.getOrderId());
+        response.setCustomerId(order.getCustomer().getCustomerId());
+        response.setCustomerName(order.getCustomer().getFirstName() + " "
+                + order.getCustomer().getLastName());
+        response.setCustomerEmail(order.getCustomer().getEmail());
+        response.setOrderStatus(order.getOrderStatus().name());
+        response.setTotalAmount(order.getTotalAmount());
+        response.setOrderDate(order.getOrderDate());
+
+        List<OrderItemResponse> itemResponses = new ArrayList<>();
+        for (OrderItem item : order.getOrderItems()) {
+            OrderItemResponse itemResponse = new OrderItemResponse();
+            itemResponse.setOrderItemId(item.getOrderItemId());
+            itemResponse.setProductId(item.getProduct().getProductId());
+            itemResponse.setProductName(item.getProduct().getName());
+            itemResponse.setProductSku(item.getProduct().getSku());
+            itemResponse.setQuantity(item.getQuantity());
+            itemResponse.setUnitPrice(item.getUnitPrice());
+            itemResponse.setLineTotal(item.getLineTotal());
+            itemResponses.add(itemResponse);
+        }
+        response.setItems(itemResponses);
+
+        return response;
     }
 }

@@ -1,7 +1,7 @@
 package com.mahes.ecommerce_inventory_system.controller;
 
 import com.mahes.ecommerce_inventory_system.dto.CreateOrderRequest;
-import com.mahes.ecommerce_inventory_system.entity.Order;
+import com.mahes.ecommerce_inventory_system.dto.OrderResponse;
 import com.mahes.ecommerce_inventory_system.service.OrderService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,24 +19,21 @@ public class OrderController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Order>> getAllOrders() {
+    public ResponseEntity<List<OrderResponse>> getAllOrders() {
         return ResponseEntity.ok(orderService.getAllOrders());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Order> getOrderById(@PathVariable Long id) {
+    public ResponseEntity<OrderResponse> getOrderById(@PathVariable Long id) {
         return ResponseEntity.ok(orderService.getOrderById(id));
     }
 
     @PostMapping
     public ResponseEntity<?> placeOrder(@RequestBody CreateOrderRequest request) {
         try {
-            Order createdOrder = orderService.placeOrder(request);
+            OrderResponse createdOrder = orderService.placeOrder(request);
             return ResponseEntity.status(201).body(createdOrder);
         } catch (RuntimeException e) {
-            // Catches errors like "insufficient stock" or "customer not found"
-            // and returns a clean 400 Bad Request with the error message,
-            // instead of letting a raw 500 server error leak out.
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
